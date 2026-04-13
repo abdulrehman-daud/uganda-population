@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Uganda Population Pyramid</title>
+  <style>
+    :root {
+      --male: #3b82f6;
+      --female: #ec4899;
+      --axis: #9ca3af;
+      --bg: #f3f4f6;
+      --card: #ffffff;
+      --text: #111827;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 24px;
+    }
+    .card {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: var(--card);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
+    }
+    h1 { margin: 0 0 8px; }
+    .sub { margin: 0 0 18px; color: #4b5563; }
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    #yearSlider { width: 300px; }
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: white;
+      background: #111827;
+      cursor: pointer;
+    }
+    .legend {
+      display: flex;
+      gap: 14px;
+      margin: 8px 0 14px;
+      font-size: 14px;
+    }
+    .dot {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .chart {
+      border-top: 1px solid #e5e7eb;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 10px 0;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 64px 1fr;
+      align-items: center;
+      min-height: 20px;
+      gap: 8px;
+    }
+    .left, .right {
+      position: relative;
+      height: 14px;
+      background: #f9fafb;
+    }
+    .left::after, .right::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      width: 1px;
+      height: 100%;
+      background: var(--axis);
+    }
+    .left::after { right: 0; }
+    .right::before { left: 0; }
+    .bar-male {
+      height: 100%;
+      background: var(--male);
+      margin-left: auto;
+    }
+    .bar-female {
+      height: 100%;
+      background: var(--female);
+    }
+    .age {
+      text-align: center;
+      font-size: 12px;
+      color: #374151;
+    }
+    .tooltip {
+      position: fixed;
+      pointer-events: none;
+      background: #111827;
+      color: #fff;
+      font-size: 12px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+      opacity: 0;
+      transform: translate(8px, 8px);
+      transition: opacity 0.08s linear;
+      z-index: 9999;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Uganda Population Pyramid</h1>
+    <p class="sub">Top is 100+ and bottom is 0-4. Values are population in thousands.</p>
+
+    <div class="controls">
+      <label for="yearSlider">Year</label>
+      <input id="yearSlider" type="range" min="1950" max="2100" step="1" value="2026" />
+      <strong id="yearLabel">2026</strong>
+      <button id="playBtn" type="button">Start Auto (0.3s)</button>
+    </div>
+
+    <div class="legend">
+      <span><span class="dot" style="background: var(--male)"></span>Male</span>
+      <span><span class="dot" style="background: var(--female)"></span>Female</span>
+    </div>
+
+    <div id="chart" class="chart"></div>
+  </div>
+  <div id="tooltip" class="tooltip"></div>
+
+  <script src="./uganda_data.js"></script>
+  <script>
+    const ages = ["0-4","5-9","10-14","15-19","20-24","25-29","30-34","35-39","40-44","45-49","50-54","55-59","60-64","65-69","70-74","75-79","80-84","85-89","90-94","95-99","100+"];
+    const chartEl = document.getElementById("chart");
+    const yearSlider = document.getElementById("yearSlider");
+    const yearLabel = document.getElementById("yearLabel");
+    const playBtn = document.getElementById("playBtn");
+    const tooltip = document.getElementById("tooltip");
+    let timer = null;
+    let isPlaying = false;
+    const autoplayDelayMs = 300;
+
+    function formatPopulation(value) {
+      return `${value.toLocaleString()} thousand`;
+    }
+
+    function showTooltip(text, event) {
+      tooltip.textContent = text;
+      tooltip.style.left = `${event.clientX}px`;
+      tooltip.style.top = `${event.clientY}px`;
+      tooltip.style.opacity = "1";
+    }
+
+    function moveTooltip(event) {
+      tooltip.style.left = `${event.clientX}px`;
+      tooltip.style.top = `${event.clientY}px`;
+    }
+
+    function hideTooltip() {
+      tooltip.style.opacity = "0";
+    }
+
+    function render(year) {
+      const yearData = data[year];
+      yearLabel.textContent = year;
+      chartEl.innerHTML = "";
+
+      for (let i = ages.length - 1; i >= 0; i -= 1) {
+        const male = yearData.male[i];
+        const female = yearData.female[i];
+        const malePct = (male / maxValue) * 100;
+        const femalePct = (female / maxValue) * 100;
+
+        const age = ages[i];
+        const row = document.createElement("div");
+        row.className = "row";
+        row.innerHTML = `
+          <div class="left">
+            <div class="bar-male" style="width:${malePct}%"></div>
+          </div>
+          <div class="age">${age}</div>
+          <div class="right">
+            <div class="bar-female" style="width:${femalePct}%"></div>
+          </div>
+        `;
+        const maleBar = row.querySelector(".bar-male");
+        const femaleBar = row.querySelector(".bar-female");
+        const maleText = `Male ${age} (${year}): ${formatPopulation(male)}`;
+        const femaleText = `Female ${age} (${year}): ${formatPopulation(female)}`;
+        maleBar.addEventListener("mouseenter", (e) => showTooltip(maleText, e));
+        maleBar.addEventListener("mousemove", moveTooltip);
+        maleBar.addEventListener("mouseleave", hideTooltip);
+        femaleBar.addEventListener("mouseenter", (e) => showTooltip(femaleText, e));
+        femaleBar.addEventListener("mousemove", moveTooltip);
+        femaleBar.addEventListener("mouseleave", hideTooltip);
+        chartEl.appendChild(row);
+      }
+    }
+
+    function nextYear() {
+      const current = Number(yearSlider.value);
+      const maxYear = Number(yearSlider.max);
+      if (current >= maxYear) {
+        stopAuto();
+        return;
+      }
+      const next = current + 1;
+      yearSlider.value = String(next);
+      render(next);
+    }
+
+    yearSlider.addEventListener("input", (e) => {
+      render(Number(e.target.value));
+    });
+
+    function stopAuto() {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      isPlaying = false;
+      playBtn.textContent = "Start Auto (0.3s)";
+    }
+
+    function scheduleNextTick() {
+      timer = setTimeout(() => {
+        nextYear();
+        if (isPlaying) scheduleNextTick();
+      }, autoplayDelayMs);
+    }
+
+    function startAuto() {
+      if (isPlaying) return;
+      if (Number(yearSlider.value) >= Number(yearSlider.max)) {
+        yearSlider.value = yearSlider.min;
+        render(Number(yearSlider.value));
+      }
+      isPlaying = true;
+      playBtn.textContent = "Stop Auto";
+      scheduleNextTick();
+    }
+
+    playBtn.addEventListener("click", () => {
+      if (isPlaying) stopAuto();
+      else startAuto();
+    });
+
+    render(2026);
+  </script>
+</body>
+</html>
